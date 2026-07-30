@@ -82,7 +82,7 @@ def get_gspread_client():
     raise RuntimeError(
         "ไม่พบ Google credentials! ตั้งค่า GOOGLE_CREDENTIALS_BASE64 หรือ GOOGLE_CREDENTIALS หรือวางไฟล์ credentials.json"
     )
-
+    
 def get_worksheet():
     """เปิด worksheet"""
     client = get_gspread_client()
