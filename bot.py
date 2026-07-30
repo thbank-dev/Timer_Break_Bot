@@ -51,20 +51,28 @@ logger = logging.getLogger(__name__)
 
 # ==================== GOOGLE SHEETS ====================
 def get_gspread_client():
-    """สร้าง client จาก credentials (รองรับทั้งไฟล์และ env var)"""
+    """สร้าง client จาก credentials (รองรับ env var ปกติ + Base64)"""
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
 
-    # วิธีที่ 1: จาก env var (แนะนำสำหรับ Railway / Render)
+    # วิธีที่ 1: จาก Base64 (แนะนำสำหรับ Railway)
+    creds_b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    if creds_b64:
+        import base64
+        info = json.loads(base64.b64decode(creds_b64).decode("utf-8"))
+        credentials = Credentials.from_service_account_info(info, scopes=scopes)
+        return gspread.authorize(credentials)
+
+    # วิธีที่ 2: จาก env var ธรรมดา
     creds_json = os.getenv("GOOGLE_CREDENTIALS")
     if creds_json:
         info = json.loads(creds_json)
         credentials = Credentials.from_service_account_info(info, scopes=scopes)
         return gspread.authorize(credentials)
 
-    # วิธีที่ 2: จากไฟล์ credentials.json (สำหรับ local)
+    # วิธีที่ 3: จากไฟล์ credentials.json (สำหรับ local)
     if os.path.exists("credentials.json"):
         credentials = Credentials.from_service_account_file(
             "credentials.json", scopes=scopes
@@ -72,9 +80,8 @@ def get_gspread_client():
         return gspread.authorize(credentials)
 
     raise RuntimeError(
-        "ไม่พบ Google credentials! ตั้งค่า GOOGLE_CREDENTIALS หรือวางไฟล์ credentials.json"
+        "ไม่พบ Google credentials! ตั้งค่า GOOGLE_CREDENTIALS_BASE64 หรือ GOOGLE_CREDENTIALS หรือวางไฟล์ credentials.json"
     )
-
 
 def get_worksheet():
     """เปิด worksheet"""
