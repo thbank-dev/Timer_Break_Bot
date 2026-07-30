@@ -180,7 +180,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⌛️ <b>จะไปไหน ?</b> ⌛️\n\n"
-        "เลือกสิ่งที่คุณจะไป:\n"
+        
         "กดปุ่มด้านล่างได้เลย"
     )
     thread_id = update.message.message_thread_id if update.message else None
@@ -271,7 +271,7 @@ async def process_return(
     # ส่งเมนูใหม่หลังกลับมา
     menu_text = (
         "⌛️ <b>จะไปไหน ?</b> ⌛️\n\n"
-        "เลือกสิ่งที่คุณจะไป:\n"
+        
         "กดปุ่มด้านล่างได้เลย"
     )
     await context.bot.send_message(
