@@ -286,9 +286,12 @@ async def process_return(
     notify_text = (
         f"🔙 กลับมาแล้ว 🔚\n"
         f"{action_emoji}\n"
+        
         f"Name: {data['name']}\n"
+        
         f"🟢 start: {start_str}\n"
         f"🔴 end: {end_str}\n"
+        
         f"🟡 ใช้เวลา ({duration_str})"
     )
 
@@ -389,6 +392,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         notify = (
             f"📝 Name: {name}\n"
             f"{action_emoji}\n"
+            
             f"✅ ช่วงเวลา: {start_str}"
         )
         await context.bot.send_message(
