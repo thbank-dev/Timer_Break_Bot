@@ -426,30 +426,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await process_return(update, context, user_id, from_command=False)
 
 async def check_overdue_sessions(context: ContextTypes.DEFAULT_TYPE):
-    """เช็คคนที่ลืมกดกลับมาแล้วเกิน 20 นาที แล้วแท็กแจ้งเตือน"""
+    """แท็กแจ้งเตือนเพียงครั้งเดียว เมื่อผู้ใช้ครบ 20 นาที"""
     now = datetime.now(TIMEZONE)
-    to_remind = []
 
     for user_id, data in list(active_sessions.items()):
-        if data.get("reminded"):
+        # เคยแจ้งเตือนแล้ว ไม่แจ้งซ้ำ
+        if data.get("reminded", False):
             continue
 
         elapsed_min = (now - data["start"]).total_seconds() / 60
-        if elapsed_min >= 20:
-            to_remind.append((user_id, data, elapsed_min))
 
-    for user_id, data, elapsed_min in to_remind:
-        chat_id = data.get("chat_id")
-        thread_id = data.get("thread_id")
-        name = data.get("name", "คุณ")
-
-        if not chat_id:
+        # ยังไม่ครบ 20 นาที
+        if elapsed_min < 20:
             continue
 
+        chat_id = data.get("chat_id")
+        thread_id = data.get("thread_id")
+        name = data.get("name", "ผู้ใช้งาน")
+
+        if not chat_id:
+            logger.warning(
+                f"Cannot remind user {user_id}: chat_id is missing"
+            )
+            continue
+
+        # แท็กผู้ใช้งานด้วย Telegram user ID
         mention = f'<a href="tg://user?id={user_id}">{name}</a>'
         text = (
-            f"⚠️ {mention} ลืมกด <b>กลับมาแล้ว</b> นานเกิน 20 นาทีแล้วครับ\n"
-            f"กรุณากดปุ่มกลับมาด้วยนะ"
+            f"⚠️ {mention}\n"
+            f"ครบเวลา <b>20 นาที</b> แล้วครับ\n"
+            f"กรุณากดปุ่ม <b>กลับมาแล้ว</b>"
         )
 
         try:
@@ -459,10 +465,18 @@ async def check_overdue_sessions(context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML,
                 message_thread_id=thread_id,
             )
+
+            # ตั้งเป็น True หลังส่งสำเร็จ เพื่อไม่ให้แจ้งซ้ำ
             active_sessions[user_id]["reminded"] = True
-            logger.info(f"Reminded user {user_id} ({name}) - overdue {elapsed_min:.1f} min")
+
+            logger.info(
+                f"One-time 20-minute reminder sent to "
+                f"{user_id} ({name})"
+            )
         except Exception as e:
-            logger.error(f"Failed to remind user {user_id}: {e}")
+            logger.error(
+                f"Failed to remind user {user_id}: {e}"
+            )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
