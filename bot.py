@@ -134,11 +134,14 @@ def load_active_sessions_from_sheet():
                     start = datetime.now(TIMEZONE)
 
                 active_sessions[user_id] = {
-                    "action": row["Action"],
-                    "start": start,
-                    "name": row["Name"],
-                    "username": row.get("Username", ""),
+                    "action": action,
+                    "start": start_time,
+                    "name": name,
+                    "username": username,
                     "control_msg_id": None,
+                    "chat_id": chat_id,
+                    "thread_id": thread_id,
+                    "reminded": False,
                 }
                 loaded += 1
         logger.info(f"Loaded {loaded} active sessions from Google Sheet")
@@ -406,6 +409,45 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await process_return(update, context, user_id, from_command=False)
 
+async def check_overdue_sessions(context: ContextTypes.DEFAULT_TYPE):
+    """เช็คคนที่ลืมกดกลับมาแล้วเกิน 20 นาที แล้วแท็กแจ้งเตือน"""
+    now = datetime.now(TIMEZONE)
+    to_remind = []
+
+    for user_id, data in list(active_sessions.items()):
+        if data.get("reminded"):
+            continue
+
+        elapsed_min = (now - data["start"]).total_seconds() / 60
+        if elapsed_min >= 20:
+            to_remind.append((user_id, data, elapsed_min))
+
+    for user_id, data, elapsed_min in to_remind:
+        chat_id = data.get("chat_id")
+        thread_id = data.get("thread_id")
+        name = data.get("name", "คุณ")
+
+        if not chat_id:
+            continue
+
+        mention = f'<a href="tg://user?id={user_id}">{name}</a>'
+        text = (
+            f"⚠️ {mention} ลืมกด <b>กลับมาแล้ว</b> นานเกิน 20 นาทีแล้วครับ\n"
+            f"กรุณากดปุ่มกลับมาด้วยนะ"
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                message_thread_id=thread_id,
+            )
+            active_sessions[user_id]["reminded"] = True
+            logger.info(f"Reminded user {user_id} ({name}) - overdue {elapsed_min:.1f} min")
+        except Exception as e:
+            logger.error(f"Failed to remind user {user_id}: {e}")
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -434,7 +476,11 @@ def main():
     except Exception as e:
         logger.warning(f"Skip loading sessions: {e}")
 
-    app = Application.builder().token(BOT_TOKEN).build()
+        app = Application.builder().token(BOT_TOKEN).build()
+
+    # เช็คคนลืมกดกลับมาทุก 1 นาที
+    if app.job_queue:
+        app.job_queue.run_repeating(check_overdue_sessions, interval=60, first=30)
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("menu", menu_command))
