@@ -124,26 +124,39 @@ def load_active_sessions_from_sheet():
         worksheet = get_worksheet()
         records = worksheet.get_all_records()
         loaded = 0
-        for row in records:
-            if row.get("Status") == "Out":
-                user_id = int(row["User_ID"])
-                try:
-                    start = datetime.strptime(row["Start_Time"], "%d/%m/%Y %H:%M:%S")
-                    start = start.replace(tzinfo=TIMEZONE)
-                except Exception:
-                    start = datetime.now(TIMEZONE)
 
-                active_sessions[user_id] = {
-                    "action": action,
-                    "start": start_time,
-                    "name": name,
-                    "username": username,
-                    "control_msg_id": None,
-                    "chat_id": chat_id,
-                    "thread_id": thread_id,
-                    "reminded": False,
-                }
-                loaded += 1
+        for row in records:
+            if row.get("Status") != "Out":
+                continue
+
+            try:
+                user_id = int(row["User_ID"])
+            except (KeyError, TypeError, ValueError):
+                logger.warning(f"Skip invalid active-session row: {row}")
+                continue
+
+            try:
+                start = datetime.strptime(
+                    str(row.get("Start_Time", "")),
+                    "%d/%m/%Y %H:%M:%S",
+                ).replace(tzinfo=TIMEZONE)
+            except (TypeError, ValueError):
+                start = datetime.now(TIMEZONE)
+
+            active_sessions[user_id] = {
+                "action": str(row.get("Action") or "ออกไป"),
+                "start": start,
+                "name": str(row.get("Name") or f"User {user_id}"),
+                "username": str(row.get("Username") or ""),
+                "control_msg_id": None,
+                # ชีตเดิมไม่ได้เก็บ chat_id/thread_id จึงยังเตือนอัตโนมัติ
+                # สำหรับ session ที่กู้คืนหลังรีสตาร์ทไม่ได้
+                "chat_id": None,
+                "thread_id": None,
+                "reminded": False,
+            }
+            loaded += 1
+
         logger.info(f"Loaded {loaded} active sessions from Google Sheet")
     except Exception as e:
         logger.error(f"Failed to load active sessions: {e}")
@@ -347,6 +360,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "name": name,
             "username": username,
             "control_msg_id": None,
+            "chat_id": chat_id,
+            "thread_id": thread_id,
+            "reminded": False,
         }
 
         if action_key == "bathroom":
@@ -471,16 +487,23 @@ def main():
     if not SPREADSHEET_ID:
         raise RuntimeError("กรุณาตั้งค่า SPREADSHEET_ID ใน environment variable")
 
-    try:
-        load_active_sessions_from_sheet()
-    except Exception as e:
-        logger.warning(f"Skip loading sessions: {e}")
+    # ต้องสร้าง app ทุกครั้ง ไม่ควรอยู่ภายใน except
+    app = Application.builder().token(BOT_TOKEN).build()
 
-        app = Application.builder().token(BOT_TOKEN).build()
+    load_active_sessions_from_sheet()
 
     # เช็คคนลืมกดกลับมาทุก 1 นาที
-    if app.job_queue:
-        app.job_queue.run_repeating(check_overdue_sessions, interval=60, first=30)
+    if app.job_queue is not None:
+        app.job_queue.run_repeating(
+            check_overdue_sessions,
+            interval=60,
+            first=30,
+        )
+    else:
+        logger.warning(
+            "JobQueue is unavailable. Install: "
+            'python-telegram-bot[job-queue]'
+        )
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("menu", menu_command))
