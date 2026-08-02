@@ -516,7 +516,7 @@ def main():
     else:
         logger.warning(
             "JobQueue is unavailable. Install: "
-            'python-telegram-bot[job-queue]'
+            'python-telegram-bot[job-queue]==22.3'
         )
 
     app.add_handler(CommandHandler("start", start_command))
